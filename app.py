@@ -17,32 +17,187 @@ from ranker import CandidateRanker
 # Page Configuration & Header
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Smart Shortlisting Engine", page_icon="⚡", layout="wide"
-)
-
-st.title("⚡ Smart Shortlisting Engine")
-st.caption(
-    "Upload a Job Description PDF and Candidate Resumes to extract skills,"
-    " audit bias, and generate XAI-ranked leaderboards."
+    page_title="Shortlist Desk", page_icon="🗂", layout="wide"
 )
 
 # -----------------------------------------------------------------------------
-# Sidebar Configuration
+# Custom styling
 # -----------------------------------------------------------------------------
-st.sidebar.header(" Engine Controls")
-alpha = st.sidebar.slider(
-    "Keyword Weight (BM25 α)",
-    min_value=0.0,
-    max_value=1.0,
-    value=0.4,
-    step=0.05,
-    help="Higher α prioritizes exact skill matches. Lower α favors SBERT semantic context.",
+# This block of CSS just re-skins the default Streamlit look (different fonts,
+# colors, card borders, etc.) so the page doesn't look like an out-of-the-box
+# Streamlit demo. It doesn't change any logic below -- purely visual.
+# -----------------------------------------------------------------------------
+# Color palette (defined once as plain variables, so every hex code below
+# traces back to one of these four names -- easy to tweak later).
+#   CREAM  = page background (warm off-white)
+#   NOIR   = main text color (near-black, high contrast against cream)
+#   TAUPE  = primary accent -- buttons, headers, borders
+#   BLUSH  = secondary accent, used sparingly -- top-candidate highlight,
+#            hover states
+# -----------------------------------------------------------------------------
+CREAM = "#F5F0E6"
+NOIR = "#1A1A1A"
+TAUPE = "#7A6C5D"
+BLUSH = "#E8C4C0"
+
+st.markdown(
+    f"""
+    <style>
+    /* An editorial serif for headings + a plain sans for body text reads
+       more like a printed program than a typical app/dashboard font pairing. */
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600&display=swap');
+
+    html, body, [class*="css"] {{
+        font-family: 'Source Sans 3', sans-serif;
+        color: {NOIR};
+    }}
+
+    h1, h2, h3, .desk-header h1 {{
+        font-family: 'Fraunces', serif;
+        font-weight: 600;
+    }}
+
+    /* Overall app background -- flat cream, no gradient/glow, so it reads
+       like paper rather than a "tech product" screen. */
+    .stApp {{
+        background-color: {CREAM};
+        color: {NOIR};
+    }}
+
+    /* Header / title area */
+    .desk-header {{
+        padding: 1.4rem 1.6rem;
+        border-bottom: 3px solid {TAUPE};
+        margin-bottom: 1.4rem;
+    }}
+    .desk-header h1 {{
+        margin: 0;
+        font-size: 2.1rem;
+        color: {NOIR};
+        letter-spacing: 0.2px;
+    }}
+    .desk-header p {{
+        margin: 0.35rem 0 0 0;
+        color: {TAUPE};
+        font-size: 1rem;
+        font-style: italic;
+    }}
+
+    /* Section labels -- small printed "tag" rather than a glowing chip */
+    .section-tag {{
+        display: inline-block;
+        background: transparent;
+        color: {TAUPE};
+        border-bottom: 2px solid {TAUPE};
+        padding: 0 0.1rem 0.15rem 0.1rem;
+        font-family: 'Source Sans 3', sans-serif;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        margin-bottom: 0.6rem;
+    }}
+
+    /* Body text, labels, captions */
+    p, label, .stMarkdown, .stCaption {{
+        color: {NOIR};
+    }}
+
+    /* File uploader boxes */
+    [data-testid="stFileUploaderDropzone"] {{
+        background: #FFFFFF;
+        border: 1.5px dashed {TAUPE};
+        border-radius: 4px;
+    }}
+
+    /* Buttons -- taupe fill, blush on hover instead of a brighter/glowing tone */
+    .stButton > button {{
+        background: {TAUPE};
+        color: {CREAM};
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        padding: 0.5rem 1.3rem;
+    }}
+    .stButton > button:hover {{
+        background: {BLUSH};
+        color: {NOIR};
+    }}
+
+    /* Download button gets the same treatment */
+    .stDownloadButton > button {{
+        background: {TAUPE};
+        color: {CREAM};
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+    }}
+    .stDownloadButton > button:hover {{
+        background: {BLUSH};
+        color: {NOIR};
+    }}
+
+    /* Dataframe / table container */
+    [data-testid="stDataFrame"] {{
+        border: 1px solid {TAUPE};
+        border-radius: 4px;
+        overflow: hidden;
+    }}
+
+    /* Expanders (scorecards) -- taupe header, cream body, so the top-ranked
+       card can be picked out later with a blush border (see render_scorecard) */
+    .streamlit-expanderHeader {{
+        background: #EFE8D8;
+        color: {NOIR};
+        border-radius: 4px;
+        font-weight: 600;
+    }}
+    details {{
+        border: 1px solid {TAUPE};
+        border-radius: 4px;
+        margin-bottom: 0.6rem;
+    }}
+
+    /* Rank #1's card gets a blush left-edge so it stands out at a glance --
+       this class is added only to the top card, see render_scorecard() */
+    .top-rank-card details {{
+        border-left: 5px solid {BLUSH};
+    }}
+
+    hr {{
+        border-color: {TAUPE};
+        opacity: 0.4;
+    }}
+
+    /* Info / warning / success boxes -- recolor so they don't clash with the
+       cream palette (Streamlit's defaults are blue/red/green by default) */
+    [data-testid="stAlert"] {{
+        background: #EFE8D8;
+        color: {NOIR};
+        border-left: 4px solid {TAUPE};
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-st.sidebar.markdown(
-    f"**Weighting Split:**\n- BM25 (Keywords): **{int(alpha * 100)}%**\n- SBERT"
-    f" (Semantics): **{int((1 - alpha) * 100)}%**"
+st.markdown(
+    """
+    <div class="desk-header">
+        <h1>Shortlist Desk</h1>
+        <p>A ranked, explainable read on every resume against one job description.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
+
+# -----------------------------------------------------------------------------
+# NOTE: There used to be a sidebar here that let the user drag a slider to
+# change how much weight goes to keyword matching vs. semantic matching.
+# We removed that entirely -- the split is now fixed at 50/50 and is not
+# shown or editable anywhere in the UI. See the "CandidateRanker(alpha=0.5)"
+# line further down for the hardcoded value.
+# -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Step 1 & 2: User Inputs via File Uploaders
@@ -50,13 +205,15 @@ st.sidebar.markdown(
 col1, col2 = st.columns([1, 1])
 
 with col1:
-  st.subheader("1. Job Description")
+  st.markdown('<span class="section-tag">STEP 1</span>', unsafe_allow_html=True)
+  st.subheader("Job Description")
   jd_file = st.file_uploader(
       "Upload Job Description PDF", type=["pdf"], key="jd_upload"
   )
 
 with col2:
-  st.subheader("2. Candidate Resumes")
+  st.markdown('<span class="section-tag">STEP 2</span>', unsafe_allow_html=True)
+  st.subheader("Candidate Resumes")
   resume_files = st.file_uploader(
       "Upload Resumes (PDFs)",
       type=["pdf"],
@@ -65,6 +222,7 @@ with col2:
   )
 
 st.markdown("---")
+
 
 # Helper function to generate exportable Pandas DataFrame
 def get_leaderboard_dataframe(ranked_results: list[dict]) -> pd.DataFrame:
@@ -82,10 +240,42 @@ def get_leaderboard_dataframe(ranked_results: list[dict]) -> pd.DataFrame:
   return pd.DataFrame(table_data)
 
 
+# Small helper so we don't repeat the same scorecard-rendering code in
+# multiple places (top-3 loop, and the rank-search box). Renders one
+# candidate's card in the same format everywhere.
+def render_scorecard(cand: dict, explainer: "CandidateExplainer"):
+  # Rank #1 gets wrapped in a div with the "top-rank-card" class, which the
+  # CSS above uses to draw a blush-colored left edge -- a small, deliberate
+  # use of the secondary accent color rather than sprinkling it everywhere.
+  is_top_rank = cand["rank"] == 1
+  if is_top_rank:
+    st.markdown('<div class="top-rank-card">', unsafe_allow_html=True)
+
+  with st.expander(
+      f"Rank #{cand['rank']}: {cand['candidate_name']} — Match Score:"
+      f" {cand['final_score']}%",
+      expanded=True,
+  ):
+    st.markdown(explainer.generate_explanation(cand))
+
+  if is_top_rank:
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 # -----------------------------------------------------------------------------
 # Step 3: Trigger & Execution Pipeline
 # -----------------------------------------------------------------------------
-if st.button("🚀 Process & Rank Candidates", type="primary"):
+# NOTE ON STRUCTURE: This button's job is now ONLY to compute results and save
+# them into st.session_state. Nothing is displayed inside this "if" block
+# anymore. Why? Streamlit re-runs your whole script top-to-bottom on every
+# interaction (including clicking "Look Up Candidate" further down). If we
+# displayed the table/top-3 cards *inside* this "if st.button(...)" block,
+# they would vanish the moment the user clicked a different button, because
+# on that re-run this particular button is no longer being pressed.
+# By saving everything to session_state here, and displaying it in a
+# separate section below (that just reads from session_state), the leaderboard
+# and top-3 cards stay visible no matter which button the user clicks next.
+if st.button("Process & Rank Candidates", type="primary"):
   # Validation: Ensure files are uploaded
   if not jd_file:
     st.error("Please upload a Job Description PDF to continue.")
@@ -115,25 +305,10 @@ if st.button("🚀 Process & Rank Candidates", type="primary"):
   auditor = JDAuditor()
   audit_results = auditor.audit_jd(cleaned_jd)
 
-  if audit_results["total_flags"] > 0:
-    with st.expander(
-        f"⚠️ Job Description Accessibility Audit ({audit_results['total_flags']}"
-        " Flags)",
-        expanded=False,
-    ):
-      for flag in audit_results["flags"]:
-        st.warning(f"**[{flag['category']}]**: {flag['issue']}")
-        st.info(f"Fix Suggestion: {flag['recommendation']}")
-
   # 3. Dynamic Skill Extraction
   extractor = JDSkillExtractor()
   extraction_data = extractor.extract_required_skills(cleaned_jd)
   req_skills = extraction_data["extracted_skills"]
-
-  st.success(
-      f"Extracted {len(req_skills)} Required Skills from JD:"
-      f" `{', '.join(req_skills)}`"
-  )
 
   # 4. Parse Uploaded Candidate Resumes
   candidates_data = []
@@ -154,35 +329,122 @@ if st.button("🚀 Process & Rank Candidates", type="primary"):
     os.remove(tmp_res_path)
 
   # 5. Hybrid Ranking
-  ranker = CandidateRanker(alpha=alpha)
+  # alpha is hardcoded to 0.5, so the final score always works out to
+  # final_score = 0.5 * semantic_score + 0.5 * keyword_score
+  # (CandidateRanker does this math internally using the "alpha" value we
+  # pass it -- see ranker.py). There is no slider or control for this
+  # anywhere in the UI.
+  ranker = CandidateRanker(alpha=0.5)
   ranked_results = ranker.rank_candidates(cleaned_jd, candidates_data, req_skills)
 
-  # -----------------------------------------------------------------------------
-  # Step 4: Display Tabular Results & XAI Leaderboard
-  # -----------------------------------------------------------------------------
+  # Save EVERYTHING we'll need to display into session_state. This is what
+  # lets the table, top-3 cards, and lookup box all survive later re-runs.
+  st.session_state["ranked_results"] = ranked_results
+  st.session_state["req_skills"] = req_skills
+  st.session_state["audit_results"] = audit_results
+
+  # A little confirmation so the user knows the click actually did something.
+  st.success(f"Ranked {len(ranked_results)} candidates against the job description.")
+
+
+# -----------------------------------------------------------------------------
+# Step 4: Display Results (Leaderboard, Top-3 Cards, Lookup)
+# -----------------------------------------------------------------------------
+# Everything below reads from st.session_state instead of being nested inside
+# the button's "if" block. This means it stays on screen across re-runs --
+# including after the user looks up a different rank in the search box.
+# -----------------------------------------------------------------------------
+if "ranked_results" in st.session_state:
+  ranked_results = st.session_state["ranked_results"]
+  req_skills = st.session_state["req_skills"]
+  audit_results = st.session_state["audit_results"]
+  explainer = CandidateExplainer()
+
+  # JD skill extraction summary
+  st.success(
+      f"Extracted {len(req_skills)} Required Skills from JD:"
+      f" `{', '.join(req_skills)}`"
+  )
+
+  # JD bias/phrasing audit (only shown if something was actually flagged)
+  if audit_results["total_flags"] > 0:
+    with st.expander(
+        f"Job Description Accessibility Audit ({audit_results['total_flags']}"
+        " Flags)",
+        expanded=False,
+    ):
+      for flag in audit_results["flags"]:
+        st.warning(f"**[{flag['category']}]**: {flag['issue']}")
+        st.info(f"Fix Suggestion: {flag['recommendation']}")
+
+  # --- Leaderboard table -----------------------------------------------------
   st.subheader("3. Shortlist Leaderboard")
 
   df_leaderboard = get_leaderboard_dataframe(ranked_results)
 
-  # Display interactive table
+  # Display interactive table -- this still shows EVERY candidate, unchanged.
   st.dataframe(df_leaderboard, use_container_width=True)
 
   # Download button for recruiters/judges
   csv_data = df_leaderboard.to_csv(index=False).encode("utf-8")
   st.download_button(
-      label="📥 Download Results (CSV)",
+      label="Download Results (CSV)",
       data=csv_data,
       file_name="candidate_shortlist.csv",
       mime="text/csv",
   )
 
-  st.subheader("4. Detailed Candidate XAI Reports")
-  explainer = CandidateExplainer()
+  # --- Top-3 scorecards --------------------------------------------------
+  # Only rank 1, 2, and 3 get an individual scorecard here. This section is
+  # ALWAYS shown as long as we have results in session_state -- it does not
+  # disappear when the user looks up a different rank below, because it no
+  # longer lives inside the "Process & Rank Candidates" button's "if" block.
+  st.subheader("4. Detailed Candidate XAI Reports (Top 3)")
 
-  for cand in ranked_results:
-    with st.expander(
-        f"Rank #{cand['rank']}: {cand['candidate_name']} — Match Score:"
-        f" {cand['final_score']}%",
-        expanded=True,
-    ):
-      st.markdown(explainer.generate_explanation(cand))
+  top_3 = ranked_results[:3]
+  for cand in top_3:
+    render_scorecard(cand, explainer)
+
+  # -----------------------------------------------------------------------
+  # Search bar to look up ANY candidate by rank number.
+  # This does NOT replace the top-3 section above -- both are visible at
+  # the same time. Looking up rank 7, for example, just adds one more
+  # scorecard below, without hiding ranks 1-3.
+  # -----------------------------------------------------------------------
+  st.markdown("---")
+  st.markdown('<span class="section-tag">LOOKUP</span>', unsafe_allow_html=True)
+  st.subheader("Find a Specific Candidate by Rank")
+
+  total_candidates = len(ranked_results)
+
+  rank_to_find = st.number_input(
+      f"Enter a rank between 1 and {total_candidates}",
+      min_value=1,
+      max_value=max(total_candidates, 1),  # avoid max_value=0 crashing the widget
+      value=1,
+      step=1,
+  )
+
+  if st.button("Look Up Candidate"):
+    # Guard against an out-of-range rank instead of letting the app crash.
+    if rank_to_find < 1 or rank_to_find > total_candidates:
+      st.warning(
+          f"There's no candidate at rank {rank_to_find}. Please enter a"
+          f" number between 1 and {total_candidates}."
+      )
+    elif rank_to_find <= 3:
+      # Ranks 1-3 are already shown above in the Top 3 section -- let the
+      # user know instead of just silently reprinting the same card.
+      st.info(
+          f"Rank {rank_to_find} is already shown above in the Top 3 section."
+      )
+    else:
+      # Ranks start at 1, but Python lists start at 0, so we subtract 1.
+      found_candidate = ranked_results[rank_to_find - 1]
+      render_scorecard(found_candidate, explainer)
+else:
+  # Nothing has been processed yet this session.
+  st.info(
+      "Upload a Job Description and resumes above, then click 'Process &"
+      " Rank Candidates' to see the leaderboard and top candidates."
+  )
